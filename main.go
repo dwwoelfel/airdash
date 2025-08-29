@@ -59,12 +59,18 @@ func launched(app appkit.Application, delegate *appkit.ApplicationDelegate) {
 
 			// updates to the ui should happen on the main thread to avoid segfaults
 			dispatch.MainQueue().DispatchAsync(func() {
-				item.Button().SetTitle(fmt.Sprintf("🌡️ %.2f  💨 %.0f  💧 %.1f  🫧 %.0f",
-					temperature,
-					airGradientMeasures.Pm02,
-					airGradientMeasures.Rhum,
-					airGradientMeasures.Rco2,
-				))
+				if false {
+					item.Button().SetTitle(fmt.Sprintf("🌡️ %.2f  💨 %.0f  💧 %.1f  🫧 %.0f",
+						temperature,
+						airGradientMeasures.Pm02,
+						airGradientMeasures.Rhum,
+						airGradientMeasures.Rco2,
+					))
+				} else {
+					item.Button().SetTitle(fmt.Sprintf("🌲 %.0f",
+						airGradientMeasures.Rco2,
+					))
+				}
 			})
 		}
 	}()
