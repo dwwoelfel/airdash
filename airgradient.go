@@ -32,19 +32,26 @@ type AirGradientMeasures struct {
 	NoxIndex           float64   `json:"noxIndex"`
 }
 
-var ErrBadPayload = errors.New("Error unmarshalling JSON")
+const airGradientAPIBaseURL = "https://api.airgradient.com/public/api/v1"
 
-// getAirGradientAPIURL returns the AirGradient API URL
+var (
+	httpClient = &http.Client{
+		Timeout: 10 * time.Second,
+	}
+	ErrBadPayload = errors.New("error unmarshalling JSON")
+)
+
+// getAirGradientAPIURL returns the AirGradient API URL.
 func getAirGradientAPIURL(locationID int) string {
 	if locationID != 0 {
-		return fmt.Sprintf("https://api.airgradient.com/public/api/v1/locations/%d/measures/current", locationID)
+		return fmt.Sprintf("%s/locations/%d/measures/current", airGradientAPIBaseURL, locationID)
 	}
-	return fmt.Sprintf("https://api.airgradient.com/public/api/v1/locations/measures/current")
+	return fmt.Sprintf("%s/locations/measures/current", airGradientAPIBaseURL)
 }
 
 // convertTemperature converts the temperature from Celsius to Fahrenheit if the
-// temperature unit is set to Fahrenheit
-// By default the temperature unit is Celsius
+// temperature unit is set to Fahrenheit.
+// By default the temperature unit is Celsius.
 func convertTemperature(temperature float64, tempUnit string) float64 {
 	if tempUnit == "F" {
 		return (temperature * 9 / 5) + 32
@@ -52,11 +59,10 @@ func convertTemperature(temperature float64, tempUnit string) float64 {
 	return temperature
 }
 
-// fetchMeasures fetches the measures from the AirGradient API
-func fetchMeasures(airGradientAPIUrl string, token string) ([]byte, error) {
-	client := &http.Client{}
-
-	req, err := http.NewRequest("GET", airGradientAPIUrl, nil)
+// fetchMeasures fetches the measures from the AirGradient API.
+func fetchMeasures(locationID int, token string) ([]byte, error) {
+	apiURL := getAirGradientAPIURL(locationID)
+	req, err := http.NewRequest("GET", apiURL, nil)
 	if err != nil {
 		logger.Error("Creating HTTP request", "error", err)
 		return nil, err
@@ -66,12 +72,21 @@ func fetchMeasures(airGradientAPIUrl string, token string) ([]byte, error) {
 	q.Add("token", token)
 	req.URL.RawQuery = q.Encode()
 
-	resp, err := client.Do(req)
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		logger.Error("Sending HTTP request", "error", err)
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if closeErr := resp.Body.Close(); closeErr != nil {
+			logger.Error("Closing response body", "error", closeErr)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		logger.Error("HTTP request failed", "status", resp.StatusCode)
+		return nil, fmt.Errorf("HTTP %d from API", resp.StatusCode)
+	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -82,36 +97,23 @@ func fetchMeasures(airGradientAPIUrl string, token string) ([]byte, error) {
 	return body, nil
 }
 
-func getAirGradientMeasures(airGradientAPIUrl string, token string) (AirGradientMeasures, error) {
-	var arrayAirGradientMeasures []AirGradientMeasures
-	var airGradientMeasures AirGradientMeasures
-
-	payload, err := fetchMeasures(airGradientAPIUrl, token)
+func getAirGradientMeasures(locationID int, token string) (AirGradientMeasures, error) {
+	var measures AirGradientMeasures
+	payload, err := fetchMeasures(locationID, token)
 	if err != nil {
-		return airGradientMeasures, err
+		return measures, err
 	}
 
-	var checkInterface interface{}
-	json.Unmarshal(payload, &checkInterface)
-
-	switch checkInterface.(type) {
-	case map[string]interface{}:
-		err = json.Unmarshal(payload, &airGradientMeasures)
-		if err != nil {
-			return airGradientMeasures, ErrBadPayload
-		}
-	case []interface{}:
-		err = json.Unmarshal(payload, &arrayAirGradientMeasures)
-		if err != nil {
-			return airGradientMeasures, ErrBadPayload
-		}
-		if len(arrayAirGradientMeasures) == 0 {
-			return airGradientMeasures, ErrBadPayload
-		}
-		airGradientMeasures = arrayAirGradientMeasures[0]
-	default:
-		return airGradientMeasures, ErrBadPayload
+	// Try to unmarshal as a single object first
+	if err := json.Unmarshal(payload, &measures); err == nil {
+		return measures, nil
 	}
 
-	return airGradientMeasures, nil
+	// If that failed, try as an array
+	var arrayMeasures []AirGradientMeasures
+	if err := json.Unmarshal(payload, &arrayMeasures); err == nil && len(arrayMeasures) > 0 {
+		return arrayMeasures[0], nil
+	}
+
+	return measures, ErrBadPayload
 }

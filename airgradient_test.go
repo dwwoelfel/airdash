@@ -4,13 +4,26 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
+// testTransport redirects all requests to the test server.
+type testTransport struct {
+	serverURL string
+}
+
+func (t *testTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	target, _ := url.Parse(t.serverURL)
+	req.URL.Scheme = target.Scheme
+	req.URL.Host = target.Host
+	return http.DefaultTransport.RoundTrip(req)
+}
+
 func TestGetAirGradientAPIURL(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name        string
 		locationID  int
 		expectedURL string
@@ -34,7 +47,7 @@ func TestGetAirGradientAPIURL(t *testing.T) {
 }
 
 func TestConvertTemp(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name     string
 		temp     float64
 		tempUnit string
@@ -61,7 +74,7 @@ func TestConvertTemp(t *testing.T) {
 }
 
 func TestGetAirGradientMeasures(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name        string
 		payloadFile string
 		err         error
@@ -84,7 +97,7 @@ func TestGetAirGradientMeasures(t *testing.T) {
 		{
 			"incorrect-response-404",
 			"testdata/incorrect-response-404.json",
-			errors.New("Error unmarshalling JSON"),
+			errors.New("error unmarshalling JSON"),
 		},
 	}
 
@@ -95,7 +108,13 @@ func TestGetAirGradientMeasures(t *testing.T) {
 			}))
 			defer server.Close()
 
-			_, err := getAirGradientMeasures(server.URL, "SECRET-TOKEN")
+			originalClient := httpClient
+			httpClient = &http.Client{
+				Transport: &testTransport{serverURL: server.URL},
+			}
+			defer func() { httpClient = originalClient }()
+
+			_, err := getAirGradientMeasures(0, "SECRET-TOKEN")
 			assert.Equal(t, tC.err, err)
 		})
 	}

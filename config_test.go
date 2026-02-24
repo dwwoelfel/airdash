@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -10,23 +10,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func CreateTestConfig(configContent []byte) (*os.File, error) {
-	tmpfile, err := os.CreateTemp("", "*-pass")
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := tmpfile.Write(configContent); err != nil {
-		return nil, err
-	}
-	if err := tmpfile.Close(); err != nil {
-		return nil, err
-	}
-	return tmpfile, nil
+func CreateTestConfig(t *testing.T, configContent []byte) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "config.yml")
+	require.NoError(t, os.WriteFile(path, configContent, 0o600))
+	return path
 }
 
 func TestLoadConfig(t *testing.T) {
-	var testCases = []struct {
+	testCases := []struct {
 		name          string
 		configContent []byte
 		token         string
@@ -37,7 +29,7 @@ func TestLoadConfig(t *testing.T) {
 	}{
 		{
 			"full-token",
-			[]byte(fmt.Sprintf("token: \"1234567890\"\nlocationId: 0\ninterval: 60\ntempUnit: \"C\"")),
+			[]byte("token: \"1234567890\"\nlocationId: 0\ninterval: 60\ntempUnit: \"C\""),
 			"1234567890",
 			0,
 			60,
@@ -46,7 +38,7 @@ func TestLoadConfig(t *testing.T) {
 		},
 		{
 			"missing-interval",
-			[]byte(fmt.Sprintf("token: \"1234567890\"\ntempUnit: \"F\"")),
+			[]byte("token: \"1234567890\"\ntempUnit: \"F\""),
 			"1234567890",
 			0,
 			0,
@@ -60,16 +52,15 @@ func TestLoadConfig(t *testing.T) {
 			0,
 			0,
 			"",
-			&yaml.TypeError{Errors: []string{"line 1: cannot unmarshal !!str `foobar-...` into main.Config"}}},
+			&yaml.TypeError{Errors: []string{"line 1: cannot unmarshal !!str `foobar-...` into main.Config"}},
+		},
 	}
 
 	for _, tC := range testCases {
 		t.Run(tC.name, func(t *testing.T) {
-			tempFile, err := CreateTestConfig(tC.configContent)
-			require.NoError(t, err)
-			defer os.Remove(tempFile.Name())
+			configPath := CreateTestConfig(t, tC.configContent)
 
-			cfg, err := LoadConfig(tempFile.Name())
+			cfg, err := LoadConfig(configPath)
 			if err == nil {
 				assert.Equal(t, tC.token, cfg.Token)
 				assert.Equal(t, tC.locationID, cfg.LocationID)

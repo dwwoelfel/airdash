@@ -1,0 +1,41 @@
+version: "2"
+linters:
+  enable:
+    - asciicheck
+    - depguard
+    - errorlint
+    - gocritic
+    - godot
+    - gosec
+    - misspell
+    - nolintlint
+    - predeclared
+    - revive
+    - spancheck
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: io/ioutil
+              desc: Use corresponding 'os' or 'io' functions instead.
+    gosec:
+      excludes:
+        - G304 # File inclusion via variable — expected for CLI config loading
+        - G704 # SSRF via taint analysis — URL is built from const base + int location ID
+    revive:
+      rules:
+        - name: unused-parameter
+          severity: warning
+          disabled: true
+issues:
+  max-same-issues: 0
+formatters:
+  enable:
+    - gofumpt
+  settings:
+    gofumpt:
+      extra-rules: true

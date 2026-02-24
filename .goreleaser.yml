@@ -1,0 +1,83 @@
+version: 2
+
+before:
+  hooks:
+    - go mod download
+
+builds:
+  - id: airdash
+    binary: airdash
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+    goarch:
+      - arm64
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    hooks:
+      post:
+        - cmd: ./scripts/create-app-bundle.sh {{ .Path }} {{ .Version }}
+          output: true
+        - cmd: ./scripts/create-dmg.sh {{ dir .Path }}/AirDash.app {{ .Version }}
+          output: true
+
+notarize:
+  macos:
+    - enabled: '{{ isEnvSet "MACOS_NOTARY_ISSUER_ID" }}'
+      ids:
+        - airdash-app
+      sign:
+        certificate: "{{.Env.MACOS_SIGN_P12_BASE64}}"
+        password: "{{.Env.MACOS_SIGN_PASSWORD}}"
+      notarize:
+        issuer_id: "{{.Env.MACOS_NOTARY_ISSUER_ID}}"
+        key_id: "{{.Env.MACOS_NOTARY_KEY_ID}}"
+        key: "{{.Env.MACOS_NOTARY_KEY_BASE64}}"
+
+archives:
+  - id: airdash-app
+    formats: [zip]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - src: dist/AirDash.app/**/*
+        dst: AirDash.app
+        strip_parent: false
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:'
+      - '^ci:'
+      - Merge pull request
+      - Merge branch
+
+release:
+  github:
+    owner: ljagiello
+    name: airdash
+  draft: false
+  prerelease: auto
+  mode: replace
+  extra_files:
+    - glob: dist/*/AirDash-*.dmg
+  header: |
+    ## AirDash {{ .Tag }} Release
+
+    ### Installation (Apple Silicon only)
+
+    1. Download `AirDash-{{ .Version }}-arm64.dmg`
+    2. Open the DMG file
+    3. Drag `AirDash.app` to the `Applications` folder
+    4. Launch AirDash from Applications
+    5. On first launch, it will automatically set up to run at login
+
+    The app is signed and notarized for macOS.
