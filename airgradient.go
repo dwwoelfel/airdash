@@ -6,30 +6,59 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"time"
 )
 
+type FlexibleFloat64 float64
+
+func (ff *FlexibleFloat64) UnmarshalJSON(data []byte) error {
+	var v interface{}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+	switch val := v.(type) {
+	case float64:
+		*ff = FlexibleFloat64(val)
+	case string:
+		if val == "" {
+			*ff = 0
+			return nil
+		}
+		f, err := strconv.ParseFloat(val, 64)
+		if err != nil {
+			return err
+		}
+		*ff = FlexibleFloat64(f)
+	case nil:
+		*ff = 0
+	default:
+		return fmt.Errorf("invalid type for float64: %T", v)
+	}
+	return nil
+}
+
 type AirGradientMeasures struct {
-	LocationID         int       `json:"locationId"`
-	LocationName       string    `json:"locationName"`
-	Pm01               float64   `json:"pm01"`
-	Pm02               float64   `json:"pm02"`
-	Pm10               float64   `json:"pm10"`
-	Pm003Count         float64   `json:"pm003Count"`
-	Atmp               float64   `json:"atmp"`
-	Rhum               float64   `json:"rhum"`
-	Rco2               float64   `json:"rco2"`
-	Tvoc               float64   `json:"tvoc"`
-	Wifi               float64   `json:"wifi"`
-	Timestamp          time.Time `json:"timestamp"`
-	LedMode            string    `json:"ledMode"`
-	LedCo2Threshold1   float64   `json:"ledCo2Threshold1"`
-	LedCo2Threshold2   float64   `json:"ledCo2Threshold2"`
-	LedCo2ThresholdEnd float64   `json:"ledCo2ThresholdEnd"`
-	Serialno           string    `json:"serialno"`
-	FirmwareVersion    string    `json:"firmwareVersion"`
-	TvocIndex          float64   `json:"tvocIndex"`
-	NoxIndex           float64   `json:"noxIndex"`
+	LocationID         int             `json:"locationId"`
+	LocationName       string          `json:"locationName"`
+	Pm01               FlexibleFloat64 `json:"pm01"`
+	Pm02               FlexibleFloat64 `json:"pm02"`
+	Pm10               FlexibleFloat64 `json:"pm10"`
+	Pm003Count         FlexibleFloat64 `json:"pm003Count"`
+	Atmp               FlexibleFloat64 `json:"atmp"`
+	Rhum               FlexibleFloat64 `json:"rhum"`
+	Rco2               FlexibleFloat64 `json:"rco2"`
+	Tvoc               FlexibleFloat64 `json:"tvoc"`
+	Wifi               FlexibleFloat64 `json:"wifi"`
+	Timestamp          time.Time       `json:"timestamp"`
+	LedMode            string          `json:"ledMode"`
+	LedCo2Threshold1   FlexibleFloat64 `json:"ledCo2Threshold1"`
+	LedCo2Threshold2   FlexibleFloat64 `json:"ledCo2Threshold2"`
+	LedCo2ThresholdEnd FlexibleFloat64 `json:"ledCo2ThresholdEnd"`
+	Serialno           string          `json:"serialno"`
+	FirmwareVersion    string          `json:"firmwareVersion"`
+	TvocIndex          FlexibleFloat64 `json:"tvocIndex"`
+	NoxIndex           FlexibleFloat64 `json:"noxIndex"`
 }
 
 const airGradientAPIBaseURL = "https://api.airgradient.com/public/api/v1"

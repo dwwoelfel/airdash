@@ -223,7 +223,7 @@ func runGUI(cfg *Config) {
 			logger.Debug("AirGradientMeasures", "measures", measures)
 
 			// convert the temperature to the desired unit
-			temperature := convertTemperature(measures.Atmp, cfg.TempUnit)
+			temperature := convertTemperature(float64(measures.Atmp), cfg.TempUnit)
 
 			// updates to the ui should happen on the main thread to avoid segfaults
 			dispatch.MainQueue().DispatchAsync(func() {

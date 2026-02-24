@@ -99,6 +99,11 @@ func TestGetAirGradientMeasures(t *testing.T) {
 			"testdata/incorrect-response-404.json",
 			errors.New("error unmarshalling JSON"),
 		},
+		{
+			"issue-repro-strings",
+			"testdata/issue_repro.json",
+			nil,
+		},
 	}
 
 	for _, tC := range testCases {
